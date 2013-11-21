@@ -1,0 +1,6 @@
+NAME = "iSCSI-block-9"
+DATASTORE = "additional_qnap"
+TYPE = "DATABLOCK"
+PERSISTENT = "Yes"
+FSTYPE = "xfs"
+SIZE = "10000"
