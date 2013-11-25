@@ -63,9 +63,9 @@ LUN="lun-1"
 # script with definition of patched variables
 # (i.e. needed to link to pre-existing blocks on QNAP) 
 PATCH="/var/lib/one/remotes/${TARGET}.sh"
-if [ -s $PATCH ]; do
+if [ -s $PATCH ]; then
   source $PATCH
-done
+fi
  
 # below $LUN added (instead of hard-coded "lun-1")
 ########################################################

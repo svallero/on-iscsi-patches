@@ -1,6 +1,5 @@
-NAME = "iSCSI-block-ciccio"
-DATASTORE = "additional_qnap"
+NAME = "iSCSI-block-source3"
 TYPE = "DATABLOCK"
 PERSISTENT = "Yes"
-SIZE = "0"
+SIZE = "10000"
 SOURCE = "iqn.2004-04.com.qnap:ts-809u:iscsi.cloudbig2.c60347"

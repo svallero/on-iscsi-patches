@@ -1,5 +1,4 @@
-NAME = "iSCSI-block-9"
-DATASTORE = "additional_qnap"
+NAME = "iSCSI-block-create"
 TYPE = "DATABLOCK"
 PERSISTENT = "Yes"
 FSTYPE = "xfs"

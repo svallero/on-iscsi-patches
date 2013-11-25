@@ -55,7 +55,7 @@ done < <($XPATH     /DS_DRIVER_ACTION_DATA/DATASTORE/BASE_PATH \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/BASE_IQN \
                     /DS_DRIVER_ACTION_DATA/IMAGE/FSTYPE \
                     /DS_DRIVER_ACTION_DATA/IMAGE/SIZE \
-                    /DS_DRIVER_ACTION_DATA/IMAGE/SOURCE) # added by SV
+                    /DS_DRIVER_ACTION_DATA/IMAGE/SOURCE) # added by SV 
 
 BASE_PATH="${XPATH_ELEMENTS[0]}"
 RESTRICTED_DIRS="${XPATH_ELEMENTS[1]}"
@@ -70,9 +70,17 @@ SOURCE="${XPATH_ELEMENTS[8]}" # added by SV
 # added by SV #########################################
 # do not create block on target if iqn is specified in 
 # the image template as SOURCE="iqn-..."
-if [ -z $SOURCE ]; do 
-  exit 0
-done
+if [ ${SOURCE} != "-" ];then 
+  DS_ID=$(basename $BASE_PATH)
+  EXR=`ruby ${DRIVER_PATH}/scan_images.rb ${DS_ID} ${SOURCE} ${ID}`
+  if [ ! -z "${EXR}" ];then
+    error_message "${EXR}"
+    exit 1
+  else
+    echo ${SOURCE}
+    exit 0 
+  fi
+fi
 ########################################################
 
 # Check if 'TGTSETUPLUN' is installed

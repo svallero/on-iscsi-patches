@@ -21,7 +21,6 @@
 ###############################################################################
 
 # ------------ Set up the environment to source common tools ------------
-exit 0 # modified by SV
 if [ -z "${ONE_LOCATION}" ]; then
     LIB_LOCATION=/usr/lib/one
 else
@@ -59,12 +58,13 @@ TARGET=`echo $SRC|$CUT -d: -f2`
 # (i.e. needed to link to pre-existing blocks on QNAP) 
 EXIT="no"
 PATCH="/var/lib/one/remotes/${TARGET}.sh"
-if [ -s $PATCH ]; do
-  source $PATH;
-done
-if [ $EXIT=="yes" ];do
-    exit 0
-done 
+if [ -s ${PATCH} ]; then
+   source ${PATCH}
+fi
+
+if [ ${EXIT} == "yes" ]; then
+   exit 0
+fi
 ########################################################
 
 LV_NAME=`echo $TARGET|$AWK -F. '{print $(NF)}'`
