@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------------- #
-# Copyright 2002-2013, OpenNebula Project (OpenNebula.org), C12G Labs        #
+# Copyright 2002-2013, OpenNebula Project Leads (OpenNebula.org)             #
 #                                                                            #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may    #
 # not use this file except in compliance with the License. You may obtain    #
@@ -22,7 +22,6 @@
 ###############################################################################
 
 # -------- Set up the environment to source common tools & conf ------------
-
 
 if [ -z "${ONE_LOCATION}" ]; then
     LIB_LOCATION=/usr/lib/one
@@ -50,6 +49,7 @@ while IFS= read -r -d '' element; do
 done < <($XPATH     /DS_DRIVER_ACTION_DATA/DATASTORE/BASE_PATH \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/RESTRICTED_DIRS \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/SAFE_DIRS \
+                    /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/UMASK \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/HOST \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/VG_NAME \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/BASE_IQN \
@@ -60,12 +60,13 @@ done < <($XPATH     /DS_DRIVER_ACTION_DATA/DATASTORE/BASE_PATH \
 BASE_PATH="${XPATH_ELEMENTS[0]}"
 RESTRICTED_DIRS="${XPATH_ELEMENTS[1]}"
 SAFE_DIRS="${XPATH_ELEMENTS[2]}"
-DST_HOST="${XPATH_ELEMENTS[3]:-$HOST}"
-VG_NAME="${XPATH_ELEMENTS[4]:-$VG_NAME}"
-BASE_IQN="${XPATH_ELEMENTS[5]:-$BASE_IQN}"
-FSTYPE="${XPATH_ELEMENTS[6]}"
-SIZE="${XPATH_ELEMENTS[7]:-0}"
-SOURCE="${XPATH_ELEMENTS[8]}" # added by SV
+UMASK="${XPATH_ELEMENTS[3]}"
+DST_HOST="${XPATH_ELEMENTS[4]:-$HOST}"
+VG_NAME="${XPATH_ELEMENTS[5]:-$VG_NAME}"
+BASE_IQN="${XPATH_ELEMENTS[6]:-$BASE_IQN}"
+FSTYPE="${XPATH_ELEMENTS[7]}"
+SIZE="${XPATH_ELEMENTS[8]:-0}"
+SOURCE="${XPATH_ELEMENTS[9]}" # added by SV
 
 # added by SV #########################################
 # do not create block on target if iqn is specified in 
@@ -83,10 +84,7 @@ if [ ${SOURCE} != "-" ];then
 fi
 ########################################################
 
-# Check if 'TGTSETUPLUN' is installed
-tgt_setup_lun_install "$DST_HOST" "$BASE_PATH"
-
-set_up_datastore "$BASE_PATH" "$RESTRICTED_DIRS" "$SAFE_DIRS"
+set_up_datastore "$BASE_PATH" "$RESTRICTED_DIRS" "$SAFE_DIRS" "$UMASK"
 
 LV_NAME="lv-one-${ID}"
 IQN="$BASE_IQN:$DST_HOST.$VG_NAME.$LV_NAME"
@@ -96,7 +94,12 @@ REGISTER_CMD=$(cat <<EOF
     set -e
     $SUDO $LVCREATE -L${SIZE}M ${VG_NAME} -n ${LV_NAME}
 
-    $SUDO $(tgt_setup_lun "$IQN" "$DEV")
+    TID=\$($SUDO $(tgtadm_next_tid))
+    [ -z "\$TID" ] && TID=1
+
+    $SUDO $(tgtadm_target_new "\$TID" "$IQN")
+    $SUDO $(tgtadm_target_bind_all "\$TID")
+    $SUDO $(tgtadm_logicalunit_new "\$TID" "$DEV")
     $SUDO $(tgt_admin_dump_config "$TARGET_CONF")
 
     if [ "$FSTYPE" != "save_as" ]; then

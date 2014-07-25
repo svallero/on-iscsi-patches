@@ -9,7 +9,7 @@ ts-809u.sh -> /var/lib/one/remotes/ts-809u.sh
 
 mkfs -> /var/lib/one/remotes/datastore/iscsi/mkfs
 
-scan_images.rb -> /var/lib/one/remotes/datastore/iscsi/mkfs
+scan_images.rb -> /var/lib/one/remotes/datastore/iscsi/scan_images.rb
 
 rm -> /var/lib/one/remotes/datastore/iscsi/rm
 
