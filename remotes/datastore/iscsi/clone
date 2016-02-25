@@ -17,8 +17,8 @@
 #--------------------------------------------------------------------------- #
 
 ###############################################################################
-# This script is used to create a VM image (SRC) of size (SIZE) and formatted
-# as (FS)
+# This script is used to copy a VM image (SRC) to the image repository as DST
+# Several SRC types are supported
 ###############################################################################
 
 # -------- Set up the environment to source common tools & conf ------------
@@ -35,12 +35,14 @@ DRIVER_PATH=$(dirname $0)
 source ${DRIVER_PATH}/../libfs.sh
 source ${DRIVER_PATH}/iscsi.conf
 
-# -------- Get mkfs and datastore arguments from OpenNebula core ------------
+# -------- Get cp and datastore arguments from OpenNebula core ------------
 
 DRV_ACTION=$1
 ID=$2
 
-XPATH="${DRIVER_PATH}/../xpath.rb -b $DRV_ACTION"
+UTILS_PATH="${DRIVER_PATH}/.."
+
+XPATH="$UTILS_PATH/xpath.rb -b $DRV_ACTION"
 
 unset i j XPATH_ELEMENTS
 
@@ -52,9 +54,13 @@ done < <($XPATH     /DS_DRIVER_ACTION_DATA/DATASTORE/BASE_PATH \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/BRIDGE_LIST \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/VG_NAME \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/BASE_IQN \
-                    /DS_DRIVER_ACTION_DATA/IMAGE/FSTYPE \
+                    /DS_DRIVER_ACTION_DATA/IMAGE/PATH \
                     /DS_DRIVER_ACTION_DATA/IMAGE/SIZE \
-                    /DS_DRIVER_ACTION_DATA/IMAGE/SOURCE) # added by SV 
+                    /DS_DRIVER_ACTION_DATA/IMAGE/TEMPLATE/MD5 \
+                    /DS_DRIVER_ACTION_DATA/IMAGE/TEMPLATE/SHA1 \
+                    /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/NO_DECOMPRESS \
+                    /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/LIMIT_TRANSFER_BW \
+                    /DS_DRIVER_ACTION_DATA/IMAGE/CLONING_ID )
 
 BASE_PATH="${XPATH_ELEMENTS[j++]}"
 RESTRICTED_DIRS="${XPATH_ELEMENTS[j++]}"
@@ -62,27 +68,19 @@ SAFE_DIRS="${XPATH_ELEMENTS[j++]}"
 BRIDGE_LIST="${XPATH_ELEMENTS[j++]}"
 VG_NAME="${XPATH_ELEMENTS[j++]:-$VG_NAME}"
 BASE_IQN="${XPATH_ELEMENTS[j++]:-$BASE_IQN}"
-FSTYPE="${XPATH_ELEMENTS[j++]}"
-SIZE="${XPATH_ELEMENTS[j++]:-0}"
-SOURCE="${XPATH_ELEMENTS[j++]}" # added by SV
-
-# added by SV #########################################
-# do not create block on target if iqn is specified in 
-# the image template as SOURCE="iqn-..."
-if [ ${SOURCE} != "-" ];then
-  DS_ID=$(basename $BASE_PATH)
-  EXR=`ruby ${DRIVER_PATH}/scan_images.rb ${DS_ID} ${SOURCE} ${ID}`
-  if [ ! -z "${EXR}" ];then
-    error_message "${EXR}"
-    exit 1
-  else
-    echo ${SOURCE}
-    exit 0
-  fi
-fi
-########################################################
+SRC="${XPATH_ELEMENTS[j++]}"
+SIZE="${XPATH_ELEMENTS[j++]}"
+MD5="${XPATH_ELEMENTS[j++]}"
+SHA1="${XPATH_ELEMENTS[j++]}"
+NO_DECOMPRESS="${XPATH_ELEMENTS[j++]}"
+LIMIT_TRANSFER_BW="${XPATH_ELEMENTS[j++]}"
+CLONING_ID="${XPATH_ELEMENTS[j++]}"
 
 DST_HOST=`get_destination_host $ID`
+
+SRC=${SRC#${BASE_IQN}":"}
+SRC=${SRC%"."${VG_NAME}".lv-one-"${CLONING_ID}}
+echo $SRC > /tmp/vgname.txt
 
 if [ -z "$DST_HOST" ]; then
     error_message "Datastore template missing 'BRIDGE_LIST' attribute."
@@ -104,14 +102,39 @@ REGISTER_CMD=$(cat <<EOF
 
     $SUDO $(tgt_setup_lun "$IQN" "$DEV")
     $SUDO $(tgt_admin_dump_config "$TARGET_CONF")
-
-    if [ "$FSTYPE" != "save_as" ]; then
-        $SUDO $(mkfs_command "$DEV" "$FSTYPE")
-    fi
 EOF
 )
 
-ssh_exec_and_log "$DST_HOST" "$REGISTER_CMD" \
- "Error registering $DST_HOST:$DEV"
+DOWNLOADER_ARGS=`set_downloader_args "$MD5" "$SHA1" "$NO_DECOMPRESS" "$LIMIT_TRANSFER_BW" "$SRC" -`
+
+COPY_COMMAND="$UTILS_PATH/downloader.sh $DOWNLOADER_ARGS"
+
+case $SRC in
+http://*|https://*)
+    log "Downloading $SRC to the image repository"
+
+    DUMP="$COPY_COMMAND"
+    ;;
+
+*)
+    if [ `check_restricted $SRC` -eq 1 ]; then
+        log_error "Not allowed to copy images from $RESTRICTED_DIRS"
+        error_message "Not allowed to copy image file $SRC"
+        exit -1
+    fi
+
+    log "Copying local image $SRC to the image repository"
+
+    DUMP="$COPY_COMMAND"
+    ;;
+esac
+
+#echo $REGISTER_CMD > /tmp/pippo.txt
+ssh_exec_and_log "$DST_HOST" "$REGISTER_CMD" "Error registering $DST_HOST:$DEV"
+
+#exec_and_log "eval $DUMP | $SSH $DST_HOST $SUDO $DD of=$DEV bs=2M" \
+#echo $DUMP >> /tmp/pippo.txt
+exec_and_log "eval $SSH $SRC $SUDO $DD if=/dev/$VG_NAME/lv-one-$CLONING_ID | $SSH $DST_HOST $SUDO $DD of=$DEV bs=2M" \
+    "Error dumping $SRC to $DST_HOST:$DEV"
 
 echo "$IQN"
